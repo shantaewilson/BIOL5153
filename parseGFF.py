@@ -1,48 +1,78 @@
-#!/usr/bin/env python3
+#! /usr/bin/env python3
 
-# load the required modules
+# this script will parse a GFF file, extracting sequences for the annotated features
+
+#load required modules
+
+import sys
+import os
+import re 
 import argparse
 from Bio import SeqIO
 
+def get_args():
+	#create an ArgumentParser object('parser')
+	parser = argparse.ArgumentParser()
 
-#create an ArgumentParser object ('parser') that will hold the information necessary to parse the command line
-parser = argparse.ArgumentParser(description="This script accepts inputs from GFF and FASTA file")
+	# add required/positional argument
+	parser.add_argument("gff", help="name of GFF file")
+	parser.add_argument("fasta", help="name of FASTA file")
 
-# use add_argument() method to add a positional argument
-#positional arguments are *required* inputs, so their order/position matters
-#argparse treats all options as strings unless told to do otherwise
-parser.add_argument("fasta",help="name of FASTA file")
-parser.add_argument("gff",help="name of GFF file")
-
-
-#parse the arguments
-args = parser.parse_args()
+	# parse the argument
+	return parser.parse_args()
 
 
-print("We're gonna open this FASTA file:", args.fasta)
-print("We're gonna open this GFF file:", args.gff)
+def parse_fasta():
+	# open and read the FASTA file
+	genome = SeqIO.read(args.fasta, 'fasta')
+	return genome.seq
 
 
-# read in genome and store in a variable
-for genome in SeqIO.parse("/users/qkward/Desktop/watermelon_files/watermelon.fsa", "fasta"):
-	#print (genome.seq)
-	genome = genome.seq
+def reverse_comp(dna):
+	return dna.reverse_complement()
+		
+
+def parse_gff(dna):
+	# open and parse the GFF file
+	#print(len(dna))
+	gff_file = open(args.gff, 'r')
+	for line in gff_file:
+		#split each line on a tab
+		(seqid, source, feature, start, end, length, strand, phase, attribute) = line.split('\t')
+		#print(feature, start, end)
+		if(feature == 'CDS' or feature == 'tRNA' or feature == 'rRNA'):
+			#split the attribute field
+			atts = attribute.split(" ; ")
+			#print(atts[0])
+			#grab the gene name and, if present, the exon number
+			gene = re.search("^Gene\s+(\S+)", atts[0])
+			exon = re.search("exon\s+(\d+)", atts[0])
+			#print(gene.group(1), exon.group(1))
+
+		if(gene and exon):
+			print(">" + seqid.replace(" ", "_") + "_" + gene.group(1) + "_" + exon.group(1))
+		else:
+			 print(">" +seqid.replace(" ", "_") + "_" + gene.group(1))
 
 
-# open the GFF file
-GFF_file = "/users/qkward/Desktop/watermelon_files/watermelon.gff"
-GFF_in = open(GFF_file, 'r')
+		#extract the corresponding sequence
+		fragment = dna[int(start)-1:int(end)]
+		#print(len(fragment), length)
+		#print the sequence, either forward or reverse complemented  
+		if(strand == "+"):
+			print(fragment)
+		else:
+			print(reverse_comp(fragment))
+	gff_file.close()
 
-for line in GFF_in:
-# split string into list
-        fields = line.split("\t")
-        start = int(fields[3])
-        end = int(fields[4])
-        org_name = (fields[0])
-       # print(org_name)
-        gene_name = (fields[8])
-       # print(gene_name)
-        print(org_name + gene_name + genome[start:end])
+#def reverse_comp():
 
-# close GFF file
-GFF_in.close()
+def main():
+	genome = parse_fasta()
+	parse_gff(genome)
+
+
+# get the command-line arguments
+args = get_args()
+
+main()
